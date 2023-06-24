@@ -1,12 +1,26 @@
+import os
 import cv2
 import time
 from send_email import send_email
+import glob
+from threading import Thread
 
 video = cv2.VideoCapture(0)
+video.set(cv2.CAP_FFMPEG,1)
+video.set(cv2.CAP_PROP_FPS,30)
 time.sleep(1)
 
 first_frame = None
 status_list = []
+count = 1
+
+def clear_folder():
+    print("Clear Folder Started")
+    images = glob.glob("images/*.png")
+    for image in images:
+        os.remove(image)
+    print("Clear Folder Ended")
+
 while True:
     status = 0
     check, frame = video.read()
@@ -30,12 +44,23 @@ while True:
         rectangle = cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 3)
         if rectangle.any():
             status = 1
+            cv2.imwrite(f"images/{count}.png", frame)
+            count += 1
+            all_images = glob.glob("images/*.png")
+            index = int(len(all_images) / 2)
+            image_with_object = all_images[index]
 
     status_list.append(status)
     status_list = status_list[-2:]
 
     if status_list[0] == 1 and status_list[1] == 0:
-        send_email()
+        email_thread = Thread(target=send_email, args=(image_with_object, ))
+        email_thread.daemon = True
+        clear_folder_thread = Thread(target=clear_folder)
+        clear_folder_thread.daemon = True
+        email_thread.start()
+
+
     cv2.imshow("Video", frame)
     key = cv2.waitKey(1)
 
@@ -43,3 +68,5 @@ while True:
         break
 
 video.release()
+
+clear_folder_thread.start()
